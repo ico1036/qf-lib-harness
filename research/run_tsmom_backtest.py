@@ -14,6 +14,8 @@ from pathlib import Path
 _HERE = Path(__file__).parent.resolve()
 os.environ.setdefault("QF_STARTING_DIRECTORY", str(_HERE))
 
+import sys
+sys.path.insert(0, str(_HERE.parent))   # repo root — _weasyprint_stub lives there
 import _weasyprint_stub  # noqa: F401  — must precede any qf-lib import
 
 import matplotlib
@@ -91,8 +93,8 @@ def main() -> None:
         tickers_subset=universe,
     )
 
-    settings_path = _HERE / "config_files" / "settings.json"
-    secret_path = _HERE / "config_files" / "secret_settings.json"
+    settings_path = _HERE.parent / "config_files" / "settings.json"   # config_files at repo root
+    secret_path = _HERE.parent / "config_files" / "secret_settings.json"
     settings = Settings(str(settings_path), str(secret_path))
     pdf_exporter = PDFExporter(settings)
     excel_exporter = ExcelExporter(settings)

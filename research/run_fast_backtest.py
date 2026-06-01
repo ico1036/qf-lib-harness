@@ -13,6 +13,8 @@ from pathlib import Path
 _HERE = Path(__file__).parent.resolve()
 os.environ.setdefault("QF_STARTING_DIRECTORY", str(_HERE))
 
+import sys
+sys.path.insert(0, str(_HERE.parent))   # repo root — _weasyprint_stub lives there
 import _weasyprint_stub  # noqa: F401
 
 import matplotlib
