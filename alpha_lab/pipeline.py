@@ -221,12 +221,10 @@ def _run_qf_backtest(
     here = Path(__file__).parent.parent.resolve()
     os.environ.setdefault("QF_STARTING_DIRECTORY", str(here))
 
-    # macOS without brew cairo/pango cannot load weasyprint. The research dir
-    # ships _weasyprint_stub.py that replaces it with a no-op before qf-lib's
-    # PDFExporter chain imports it. MUST happen before any qf-lib import.
-    if str(here) not in sys.path:
-        sys.path.insert(0, str(here))
-    import _weasyprint_stub  # noqa: F401
+    # macOS without brew cairo/pango cannot load weasyprint; importing this
+    # stub (part of the alpha_lab package) replaces it with a no-op. MUST
+    # precede any qf-lib import, which the order below guarantees.
+    from alpha_lab import _weasyprint_stub  # noqa: F401
 
     import matplotlib
     matplotlib.use("Agg")
@@ -246,7 +244,7 @@ def _run_qf_backtest(
     from qf_lib.documents_utils.excel.excel_exporter import ExcelExporter
     from qf_lib.settings import Settings
 
-    from parquet_data_provider import build_data_provider
+    from alpha_lab.parquet_data_provider import build_data_provider
 
     data_provider = build_data_provider(
         PRICES_PATH,

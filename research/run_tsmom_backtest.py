@@ -14,9 +14,7 @@ from pathlib import Path
 _HERE = Path(__file__).parent.resolve()
 os.environ.setdefault("QF_STARTING_DIRECTORY", str(_HERE))
 
-import sys
-sys.path.insert(0, str(_HERE.parent))   # repo root — _weasyprint_stub lives there
-import _weasyprint_stub  # noqa: F401  — must precede any qf-lib import
+from alpha_lab import _weasyprint_stub  # noqa: F401  — must precede any qf-lib import
 
 import matplotlib
 matplotlib.use("Agg")  # headless
@@ -42,7 +40,7 @@ from qf_lib.documents_utils.excel.excel_exporter import ExcelExporter
 from qf_lib.settings import Settings
 
 from config import PRICES_PATH
-from parquet_data_provider import build_data_provider
+from alpha_lab.parquet_data_provider import build_data_provider
 from tsmom_alpha_model import TSMomentumAlphaModel
 
 

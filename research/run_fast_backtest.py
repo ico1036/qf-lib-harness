@@ -13,9 +13,7 @@ from pathlib import Path
 _HERE = Path(__file__).parent.resolve()
 os.environ.setdefault("QF_STARTING_DIRECTORY", str(_HERE))
 
-import sys
-sys.path.insert(0, str(_HERE.parent))   # repo root — _weasyprint_stub lives there
-import _weasyprint_stub  # noqa: F401
+from alpha_lab import _weasyprint_stub  # noqa: F401
 
 import matplotlib
 matplotlib.use("Agg")
@@ -33,7 +31,7 @@ from qf_lib.common.enums.frequency import Frequency
 from qf_lib.common.tickers.tickers import YFinanceTicker
 
 from config import PRICES_PATH
-from parquet_data_provider import build_data_provider
+from alpha_lab.parquet_data_provider import build_data_provider
 from tsmom_alpha_model import TSMomentumAlphaModel
 
 # Required for PresetDataProvider look-ahead bias check
