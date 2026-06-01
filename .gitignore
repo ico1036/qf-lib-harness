@@ -1,0 +1,17 @@
+# Large / generated data — reproducible via data_pipeline scripts
+data
+data/
+output/
+input
+
+# Env / venv / secrets
+.venv/
+.env
+config_files/secret_settings.json
+
+# Python caches
+__pycache__/
+*.pyc
+.pytest_cache/
+
+.DS_Store

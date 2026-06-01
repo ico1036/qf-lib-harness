@@ -1,0 +1,46 @@
+[project]
+name = "qf-lib-harness"
+version = "0.1.0"
+description = "Autonomous price-only alpha-research harness on top of qf-lib (US equities)."
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "qf-lib",
+    "yfinance>=0.2.40",
+    "pyarrow>=15.0.0",
+    "requests>=2.31.0",
+    "nicegui>=2.9.0",
+    "plotly>=6.7.0",
+]
+
+# ---------------------------------------------------------------------------
+# qf-lib is the *engine*: a pinned external dependency, not vendored here.
+#
+#   Default (reproducible): pin the fork's engine-only master by commit.
+#   The fork = upstream qf-lib + engine patches (bloomberg / reindex / sorting,
+#   PRs #253-262). PyPI's qf-lib (4.0.6) lacks those, so we pin the fork.
+#
+#   Local engine dev: comment the git line and uncomment the path line to
+#   edit qf-lib in place (clone the fork as a sibling dir).
+# ---------------------------------------------------------------------------
+[tool.uv.sources]
+qf-lib = { git = "https://github.com/ico1036/qf-lib.git", rev = "9ba5a0f5dcc3c3f06f8488f2b8cc7fe12afa15d8" }
+# qf-lib = { path = "../qf-lib", editable = true }
+
+[tool.uv]
+# qf-lib pins WeasyPrint==52.5 which needs old cairo/pango system libs.
+# Newer WeasyPrint ships pre-compiled wheels for macOS arm64 and is API-compatible.
+override-dependencies = [
+    "WeasyPrint>=60.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Only the harness core is a real package; the data-pipeline / backtest
+# scripts at the repo root are run directly (uv run python <script>.py).
+packages = ["alpha_lab"]
+
+[tool.pytest.ini_options]
+testpaths = ["alpha_lab/tests"]
