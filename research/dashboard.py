@@ -5,8 +5,7 @@ Plotly using the same source series so the figures are interactive but the
 underlying data is exactly the values the PDF tearsheet shows.
 
 Run:
-    DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/Caskroom/miniforge/base/envs/weasy_libs/lib \\
-        uv run python dashboard.py
+    uv run python research/dashboard.py
 Then open http://localhost:8765
 """
 from __future__ import annotations
