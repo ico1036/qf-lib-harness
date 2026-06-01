@@ -5,12 +5,21 @@
   <strong>Français</strong>
 </p>
 
-# qf-lib-harness
+<h1 align="center">qf-lib-harness</h1>
 
-> **Recherche d'alpha autonome, uniquement à partir des prix**, sur les actions
-> américaines. Écrivez une stratégie — à la main ou avec un agent IA — passez-la
-> dans un filtre in-sample / out-of-sample à l'épreuve du look-ahead, lisez le
-> verdict. C'est une itération.
+<p align="center">
+  <em>Recherche d'alpha autonome, uniquement à partir des prix, sur les actions américaines.<br>
+  Écrivez une stratégie — à la main ou avec un agent IA — passez le filtre, lisez le verdict.</em>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.11-blue" alt="Python 3.11">
+  <img src="https://img.shields.io/badge/engine-qf--lib%20(pinned)-orange" alt="qf-lib pinned">
+  <img src="https://img.shields.io/badge/tests-82%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/built%20with-Claude%20Code-d97757" alt="Claude Code">
+</p>
+
+---
 
 ## Ce que vous pouvez faire ici
 
@@ -20,7 +29,8 @@
 | 2 | **Écrire une stratégie à la main** | `alpha_lab/experiments/exp_<id>/strategy.py` | `uv run python -m alpha_lab run …` |
 | 3 | **Laisser un agent IA écrire des stratégies** | `alpha_lab/CLAUDE.md` (le contrat) | pointez Claude Code vers le dépôt |
 | 4 | **Voir les résultats** | ledger + tableau de bord | `uv run python -m alpha_lab status` · `uv run python research/dashboard.py` |
-| 5 | **Comprendre la boucle de l'agent** | [§5](#5-la-boucle-de-lagent) | — |
+| 5 | **Comprendre la boucle de l'agent** | voir §5 | — |
+| 6 | **Automatiser le dev : issue → PR** | `.claude/skills/` | `/issue-author` · `/issue-to-pr` |
 
 **D'abord, une seule fois :** `uv sync` installe qf-lib (épinglé) + les
 dépendances. Puis `touch .env` (un fichier vide attendu par la config `uv`
@@ -32,6 +42,7 @@ locale). Python est épinglé à 3.11.
 qf-lib-harness/
 ├── alpha_lab/      # le moteur : filtre AST, backtest IS/OS, ledger, expériences
 ├── research/       # pipeline de données + backtests manuels + tableau de bord
+├── .claude/skills/ # compétences de workflow dev issue-author + issue-to-pr
 ├── data/           # parquet OHLCV (gitignoré, ne quitte jamais votre machine)
 └── pyproject.toml  # qf-lib épinglé comme dépendance externe
 ```
@@ -104,8 +115,6 @@ claude            # puis : "Start the alpha_lab loop."
 `alpha_lab/experiments/exp_<id>/strategy.py`. Le cœur (`core.py`, `pipeline.py`)
 est **gelé**, et un filtre AST rejette d'emblée tout look-ahead avant qu'une
 stratégie puisse tourner — l'agent ne peut donc ni tricher ni casser le moteur.
-L'agent copie le modèle, écrit un `signal()`, le lance, lit le ledger, et itère
-(voir §5).
 
 ## 4. Voir les résultats — ledger & tableau de bord
 
@@ -144,13 +153,38 @@ LOOP FOREVER:
   7. Revenir à l'étape 1
 ```
 
-**Le ledger est la mémoire** — pas de fichier de notes séparé. Le diff git (ce
-qui a changé) et la ligne du ledger (le score obtenu) sont la leçon. La boucle
-tourne jusqu'à ce qu'un humain l'interrompe ou qu'une stratégie dépasse
-`sharpe_is > 1.5`.
+**Le ledger est la mémoire** — le diff git (ce qui a changé) et la ligne du
+ledger (le score obtenu) sont la leçon. La boucle tourne jusqu'à ce qu'un humain
+l'interrompe ou qu'une stratégie dépasse `sharpe_is > 1.5`. Contrat complet :
+**`alpha_lab/CLAUDE.md`**.
 
-Contrat complet — l'API `signal`, les champs `ctx`, les dates IS/OS verrouillées,
-le menu des facteurs : **`alpha_lab/CLAUDE.md`**.
+## 6. Compétences — automatisation issue → PR
+
+Deux compétences Claude Code **indépendantes** (dans `.claude/skills/`)
+transforment un objectif en issues GitHub, puis les issues en PR — totalement
+découplées, communiquant uniquement via GitHub Issues. Invoquez chacune
+séparément dans une session Claude Code :
+
+```text
+/issue-author    # objectif/spec → issues epic → feature → task (avec flags needs-human)
+/issue-to-pr     # une issue task prête → branche → tests → ouvre une PR (s'arrête avant le merge humain)
+```
+
+| Compétence | Fait | S'arrête à |
+|---|---|---|
+| **`issue-author`** | Décompose un objectif en arbre **epic → feature → task**, regroupe et relie (sous-issues), et marque ce qui requiert une revue humaine (`needs-human`). **Montre l'arbre pour votre approbation avant toute création.** | issues créées sur GitHub |
+| **`issue-to-pr`** | Choisit une task **prête** (ignore `needs-human`, attend `Depends on #N`), l'implémente sur une branche, lance ses tests, et ouvre une PR (`Closes #N`). | PR ouverte — **un humain merge** |
+
+```
+objectif ─► /issue-author ─► GitHub Issues ─► /issue-to-pr ─► PR ─► (merge humain)
+                                  ▲
+                  vous révisez / éditez / posez needs-human ici
+```
+
+Le contrat partagé (labels, hiérarchie de sous-issues, `Depends on #N`,
+`## Verify`, critères needs-human) vit dans **`.claude/skills/CONVENTIONS.md`**.
+`issue-to-pr` traite *n'importe quelle* issue conforme — y compris celles que
+vous avez écrites à la main.
 
 ---
 

@@ -5,11 +5,30 @@
   <a href="README_FR.md">Français</a>
 </p>
 
-# qf-lib-harness
+<h1 align="center">qf-lib-harness</h1>
 
-> Autonomous **price-only alpha research** on US equities. Write a strategy —
-> by hand or with an AI agent — run it through a look-ahead-proof IS/OS gate,
-> read the verdict. That's one iteration.
+<p align="center">
+  <em>Autonomous price-only alpha research on US equities.<br>
+  Write a strategy — by hand or with an AI agent — gate it, read the verdict.</em>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.11-blue" alt="Python 3.11">
+  <img src="https://img.shields.io/badge/engine-qf--lib%20(pinned)-orange" alt="qf-lib pinned">
+  <img src="https://img.shields.io/badge/tests-82%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/built%20with-Claude%20Code-d97757" alt="Claude Code">
+</p>
+
+<p align="center">
+  <a href="#1-get-the-data">Data</a> ·
+  <a href="#2-write-a-strategy-by-hand">Hand strategy</a> ·
+  <a href="#3-write-strategies-by-prompt-ai-agent">Agent strategy</a> ·
+  <a href="#4-see-results--ledger--dashboard">Results</a> ·
+  <a href="#5-the-agent-loop">Loop</a> ·
+  <a href="#6-skills--issue--pr-automation">Skills</a>
+</p>
+
+---
 
 ## What you can do here
 
@@ -20,6 +39,7 @@
 | 3 | **Let an AI agent write strategies** | `alpha_lab/CLAUDE.md` (the contract) | point Claude Code at the repo |
 | 4 | **See results** | ledger + dashboard | `uv run python -m alpha_lab status` · `uv run python research/dashboard.py` |
 | 5 | **Understand the agent loop** | [§5](#5-the-agent-loop) | — |
+| 6 | **Automate dev: issue → PR** | `.claude/skills/` | `/issue-author` · `/issue-to-pr` |
 
 **First, once:** `uv sync` installs qf-lib (pinned) + deps. Then `touch .env`
 (an empty file the local `uv` config expects). Python 3.11 is pinned.
@@ -30,6 +50,7 @@
 qf-lib-harness/
 ├── alpha_lab/      # the harness: AST gate, IS/OS backtest, ledger, experiments
 ├── research/       # data pipeline + manual backtests + dashboard
+├── .claude/skills/ # issue-author + issue-to-pr dev-workflow skills
 ├── data/           # OHLCV parquet (gitignored, never leaves your machine)
 └── pyproject.toml  # qf-lib pinned as an external dependency
 ```
@@ -100,8 +121,6 @@ claude            # then: "Start the alpha_lab loop."
 `alpha_lab/experiments/exp_<id>/strategy.py`. The core (`core.py`,
 `pipeline.py`) is **frozen**, and an AST gate hard-rejects any look-ahead
 before a strategy can run — so the agent cannot cheat or break the engine.
-The agent copies the template, writes a `signal()`, runs it, reads the ledger,
-and iterates (see §5).
 
 ## 4. See results — ledger & dashboard
 
@@ -140,12 +159,35 @@ LOOP FOREVER:
   7. Go back to 1
 ```
 
-The **ledger is the memory** — no separate notes file. The git diff (what
-changed) and the ledger row (what it scored) are the lesson. The loop runs
-until a human interrupts or a strategy clears `sharpe_is > 1.5`.
+The **ledger is the memory** — the git diff (what changed) and the ledger row
+(what it scored) are the lesson. Loop until a human interrupts or a strategy
+clears `sharpe_is > 1.5`. Full contract: **`alpha_lab/CLAUDE.md`**.
 
-Full contract — the `signal` API, `ctx` fields, locked IS/OS dates, the
-factor menu: **`alpha_lab/CLAUDE.md`**.
+## 6. Skills — issue → PR automation
+
+Two **independent** Claude Code skills (in `.claude/skills/`) turn a goal into
+GitHub issues, then issues into PRs — fully decoupled, talking only through
+GitHub Issues. Invoke each separately in a Claude Code session:
+
+```text
+/issue-author    # goal/spec → epic → feature → task issues (with needs-human flags)
+/issue-to-pr     # a ready task issue → branch → test → open PR (stops for human merge)
+```
+
+| Skill | Does | Stops at |
+|---|---|---|
+| **`issue-author`** | Decomposes a goal into an **epic → feature → task** tree, groups & links them (sub-issues), and flags which need human review (`needs-human`). **Shows the tree for your approval before creating anything.** | issues created on GitHub |
+| **`issue-to-pr`** | Picks a **ready** task (skips `needs-human`, waits on `Depends on #N`), implements it on a branch, runs its tests, and opens a PR (`Closes #N`). | open PR — **a human merges** |
+
+```
+goal ─► /issue-author ─► GitHub Issues ─► /issue-to-pr ─► PR ─► (human merges)
+                              ▲
+                    you review / edit / set needs-human here
+```
+
+The shared contract (labels, sub-issue hierarchy, `Depends on #N`, `## Verify`,
+needs-human criteria) lives in **`.claude/skills/CONVENTIONS.md`**. `issue-to-pr`
+works on *any* conforming issue — including ones you wrote by hand.
 
 ---
 
