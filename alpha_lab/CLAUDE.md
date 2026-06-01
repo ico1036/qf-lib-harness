@@ -1,8 +1,9 @@
 # CLAUDE.md — `alpha_lab/` package
 
-Long-only price-only alpha generation harness over `research/us_universe/`'s
-US equity OHLCV. One iter you copy a template, edit the body, run it, log
-the row. **NEVER STOP** until the human halts or `sharpe_is > 1.5`.
+Long-only price-only alpha generation harness over this repo's US equity
+OHLCV (`data/prices.parquet`, built by the data pipeline). One iter you copy a
+template, edit the body, run it, log the row. **NEVER STOP** until the human
+halts or `sharpe_is > 1.5`.
 
 ## ⛔ HARD RULE — NO LOOK-AHEAD
 

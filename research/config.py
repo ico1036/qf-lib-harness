@@ -2,7 +2,11 @@ from pathlib import Path
 import pandas as pd
 
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data"
+# Data lives at the repo root (data/), shared with the alpha_lab harness which
+# also resolves prices.parquet there. Keep this anchored to the repo root even
+# though these scripts live under research/.
+REPO_ROOT = BASE_DIR.parent
+DATA_DIR = REPO_ROOT / "data"
 PRICES_BATCHES_DIR = DATA_DIR / "prices_batches"
 LOG_DIR = DATA_DIR / "logs"
 
