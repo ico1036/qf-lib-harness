@@ -5,11 +5,30 @@
   <a href="README_FR.md">Français</a>
 </p>
 
-# qf-lib-harness
+<h1 align="center">qf-lib-harness</h1>
 
-> 미국 주식 대상 **가격 데이터만으로 하는 자율 알파 리서치**. 전략을 — 손으로든
-> AI 에이전트로든 — 작성하고, look-ahead가 차단된 IS/OS 게이트로 돌려, 판정을
-> 읽는다. 이게 한 iteration이다.
+<p align="center">
+  <em>미국 주식 대상, 가격 데이터만으로 하는 자율 알파 리서치.<br>
+  전략을 — 손으로든 AI 에이전트로든 — 작성하고, 게이트에 통과시키고, 판정을 읽는다.</em>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.11-blue" alt="Python 3.11">
+  <img src="https://img.shields.io/badge/engine-qf--lib%20(pinned)-orange" alt="qf-lib pinned">
+  <img src="https://img.shields.io/badge/tests-82%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/built%20with-Claude%20Code-d97757" alt="Claude Code">
+</p>
+
+<p align="center">
+  <a href="#1-데이터-받기">데이터</a> ·
+  <a href="#2-손으로-전략-작성">손코드</a> ·
+  <a href="#3-프롬프트로-전략-작성-ai-에이전트">에이전트</a> ·
+  <a href="#4-결과-보기--ledger--대시보드">결과</a> ·
+  <a href="#5-에이전트-루프">루프</a> ·
+  <a href="#6-스킬--이슈--pr-자동화">스킬</a>
+</p>
+
+---
 
 ## 여기서 할 수 있는 것
 
@@ -20,6 +39,7 @@
 | 3 | **AI 에이전트로 전략 작성** | `alpha_lab/CLAUDE.md` (계약서) | 레포에 Claude Code를 붙인다 |
 | 4 | **결과 보기** | ledger + 대시보드 | `uv run python -m alpha_lab status` · `uv run python research/dashboard.py` |
 | 5 | **에이전트 루프 이해** | [§5](#5-에이전트-루프) | — |
+| 6 | **개발 자동화: 이슈 → PR** | `.claude/skills/` | `/issue-author` · `/issue-to-pr` |
 
 **먼저, 1회만:** `uv sync`로 qf-lib(핀 고정)+의존성 설치. 그다음 `touch .env`
 (로컬 `uv` 설정이 기대하는 빈 파일). Python은 3.11로 고정돼 있다.
@@ -30,6 +50,7 @@
 qf-lib-harness/
 ├── alpha_lab/      # 하네스: AST 게이트, IS/OS 백테스트, ledger, 실험
 ├── research/       # 데이터 파이프라인 + 수동 백테스트 + 대시보드
+├── .claude/skills/ # issue-author + issue-to-pr 개발 워크플로 스킬
 ├── data/           # OHLCV parquet (gitignore — 머신 밖으로 안 나감)
 └── pyproject.toml  # qf-lib을 외부 의존성으로 핀 고정
 ```
@@ -100,8 +121,6 @@ claude            # 그다음: "alpha_lab 루프 시작해."
 `alpha_lab/experiments/exp_<id>/strategy.py`만 생성/수정할 수 있다. 코어
 (`core.py`, `pipeline.py`)는 **동결**돼 있고, AST 게이트가 전략 실행 전에 모든
 look-ahead를 하드 거부한다 — 그래서 에이전트는 속이거나 엔진을 깰 수 없다.
-에이전트는 템플릿을 복사하고 `signal()`을 쓰고 실행한 뒤 ledger를 읽고 반복한다
-(§5 참조).
 
 ## 4. 결과 보기 — ledger & 대시보드
 
@@ -140,12 +159,35 @@ LOOP FOREVER:
   7. 1로 돌아가기
 ```
 
-**ledger가 곧 기억**이다 — 별도 메모 파일 없음. git diff(무엇이 바뀌었나)와
-ledger 행(어떤 점수였나)이 교훈이다. 루프는 사람이 중단하거나 어떤 전략이
-`sharpe_is > 1.5`를 넘을 때까지 돈다.
+**ledger가 곧 기억**이다 — git diff(무엇이 바뀌었나)와 ledger 행(어떤 점수였나)이
+교훈이다. 루프는 사람이 중단하거나 어떤 전략이 `sharpe_is > 1.5`를 넘을 때까지
+돈다. 전체 계약: **`alpha_lab/CLAUDE.md`**.
 
-전체 계약 — `signal` API, `ctx` 필드, 고정된 IS/OS 날짜, 팩터 메뉴:
-**`alpha_lab/CLAUDE.md`**.
+## 6. 스킬 — 이슈 → PR 자동화
+
+`.claude/skills/`의 **독립된** Claude Code 스킬 2개가 목표를 GitHub 이슈로,
+다시 이슈를 PR로 바꾼다 — 서로 코드로 안 엮이고 **GitHub Issues로만** 통신.
+Claude Code 세션에서 각각 따로 invoke한다:
+
+```text
+/issue-author    # 목표/스펙 → epic → feature → task 이슈 (needs-human 플래그 포함)
+/issue-to-pr     # ready task 이슈 → 브랜치 → 테스트 → PR 생성 (사람 머지 대기에서 멈춤)
+```
+
+| 스킬 | 하는 일 | 멈추는 곳 |
+|---|---|---|
+| **`issue-author`** | 목표를 **epic → feature → task** 트리로 분해·그룹핑·연결(sub-issue)하고, 사람 검증이 필요한 것에 `needs-human` 표시. **발행 전 트리를 보여주고 승인받는다.** | GitHub에 이슈 생성 |
+| **`issue-to-pr`** | **ready** task를 골라(`needs-human` 건너뜀, `Depends on #N` 대기) 브랜치에 구현하고 테스트 후 PR 생성(`Closes #N`). | PR 생성 — **사람이 머지** |
+
+```
+목표 ─► /issue-author ─► GitHub Issues ─► /issue-to-pr ─► PR ─► (사람 머지)
+                              ▲
+                  여기서 사람이 검토/수정/needs-human 지정
+```
+
+공유 규약(라벨, sub-issue 계층, `Depends on #N`, `## Verify`, needs-human 기준)은
+**`.claude/skills/CONVENTIONS.md`**에 있다. `issue-to-pr`는 규약만 맞으면 *손으로
+만든 이슈를 포함해* 어떤 이슈든 처리한다.
 
 ---
 

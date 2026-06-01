@@ -5,11 +5,21 @@
   <a href="README_FR.md">Français</a>
 </p>
 
-# qf-lib-harness
+<h1 align="center">qf-lib-harness</h1>
 
-> 面向美股的**纯价格自主 alpha 研究**。编写一个策略——手写或借助 AI 智能体——
-> 让它通过一个杜绝未来函数（look-ahead）的样本内/样本外（IS/OS）闸门，读取判定结果。
-> 这就是一次迭代。
+<p align="center">
+  <em>面向美股的纯价格自主 alpha 研究。<br>
+  编写策略——手写或借助 AI 智能体——通过闸门，读取判定。</em>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.11-blue" alt="Python 3.11">
+  <img src="https://img.shields.io/badge/engine-qf--lib%20(pinned)-orange" alt="qf-lib pinned">
+  <img src="https://img.shields.io/badge/tests-82%20passing-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/built%20with-Claude%20Code-d97757" alt="Claude Code">
+</p>
+
+---
 
 ## 你可以在这里做什么
 
@@ -19,7 +29,8 @@
 | 2 | **手写策略** | `alpha_lab/experiments/exp_<id>/strategy.py` | `uv run python -m alpha_lab run …` |
 | 3 | **让 AI 智能体写策略** | `alpha_lab/CLAUDE.md`（契约） | 将 Claude Code 指向本仓库 |
 | 4 | **查看结果** | ledger + 仪表盘 | `uv run python -m alpha_lab status` · `uv run python research/dashboard.py` |
-| 5 | **理解智能体循环** | [§5](#5-智能体循环) | — |
+| 5 | **理解智能体循环** | 见下文 §5 | — |
+| 6 | **开发自动化：issue → PR** | `.claude/skills/` | `/issue-author` · `/issue-to-pr` |
 
 **首次，仅一次：** `uv sync` 安装 qf-lib（已锁定）+ 依赖。然后 `touch .env`
 （本地 `uv` 配置所期望的一个空文件）。Python 固定为 3.11。
@@ -30,6 +41,7 @@
 qf-lib-harness/
 ├── alpha_lab/      # 框架核心：AST 闸门、IS/OS 回测、ledger、实验
 ├── research/       # 数据管道 + 手动回测 + 仪表盘
+├── .claude/skills/ # issue-author + issue-to-pr 开发工作流技能
 ├── data/           # OHLCV parquet（已 gitignore，绝不离开你的机器）
 └── pyproject.toml  # 将 qf-lib 作为外部依赖锁定
 ```
@@ -99,8 +111,7 @@ claude            # 然后输入："Start the alpha_lab loop."
 `alpha_lab/CLAUDE.md` 是智能体的**契约**：它只能创建/修改
 `alpha_lab/experiments/exp_<id>/strategy.py`。核心（`core.py`、`pipeline.py`）
 是**冻结**的，且 AST 闸门会在策略运行前硬性拒绝任何未来函数——因此智能体无法
-作弊或破坏引擎。智能体复制模板、编写 `signal()`、运行、读取 ledger、再迭代
-（见 §5）。
+作弊或破坏引擎。
 
 ## 4. 查看结果 — ledger 与仪表盘
 
@@ -138,12 +149,35 @@ LOOP FOREVER:
   7. 回到第 1 步
 ```
 
-**ledger 即记忆**——没有单独的笔记文件。git diff（改了什么）与 ledger 行
-（得了多少分）就是教训。循环一直运行，直到人为中断或某个策略越过
-`sharpe_is > 1.5`。
-
-完整契约——`signal` API、`ctx` 字段、锁定的 IS/OS 日期、因子菜单：
+**ledger 即记忆**——git diff（改了什么）与 ledger 行（得了多少分）就是教训。
+循环一直运行，直到人为中断或某个策略越过 `sharpe_is > 1.5`。完整契约：
 **`alpha_lab/CLAUDE.md`**。
+
+## 6. 技能 — issue → PR 自动化
+
+`.claude/skills/` 中两个**相互独立**的 Claude Code 技能把目标变成 GitHub issue，
+再把 issue 变成 PR——彼此不靠代码耦合，**只通过 GitHub Issues** 通信。
+在 Claude Code 会话中分别单独调用：
+
+```text
+/issue-author    # 目标/spec → epic → feature → task issue（含 needs-human 标记）
+/issue-to-pr     # ready 的 task issue → 分支 → 测试 → 开 PR（停在等待人工合并）
+```
+
+| 技能 | 做什么 | 停在哪 |
+|---|---|---|
+| **`issue-author`** | 把目标分解为 **epic → feature → task** 树，分组并链接（sub-issue），并对需要人工审查的标记 `needs-human`。**创建前先展示整棵树供你批准。** | 在 GitHub 上创建 issue |
+| **`issue-to-pr`** | 挑选 **ready** 的 task（跳过 `needs-human`，等待 `Depends on #N`），在分支上实现并跑测试后开 PR（`Closes #N`）。 | 开 PR —— **由人合并** |
+
+```
+目标 ─► /issue-author ─► GitHub Issues ─► /issue-to-pr ─► PR ─► (人工合并)
+                              ▲
+                    你在这里审查 / 编辑 / 设定 needs-human
+```
+
+共享契约（标签、sub-issue 层级、`Depends on #N`、`## Verify`、needs-human 标准）
+位于 **`.claude/skills/CONVENTIONS.md`**。`issue-to-pr` 会处理*任何*符合契约的
+issue——包括你手写的。
 
 ---
 
