@@ -11,8 +11,9 @@ The contract:
     rebal date by descending score.
   - PIT-safe: NEVER use future bars. Negative `.shift(-N)` is hard-rejected
     at AST. `pd.read_*` and `open()` are forbidden — data only via ctx.
-  - WEIGHT_SCHEME = "equal" only (long-only, 1/TOP_N each). Other schemes
-    not yet wired.
+  - WEIGHT_SCHEME: "equal" (long-only top-N, 1/TOP_N each) or "long_short"
+    (dollar-neutral: top-N long + bottom-N short, each ±1/(2*TOP_N)). signal()
+    is identical for both — the pipeline derives the short leg from low scores.
 """
 from __future__ import annotations
 
