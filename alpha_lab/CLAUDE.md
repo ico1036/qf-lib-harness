@@ -37,9 +37,13 @@ Plus four module constants the pipeline reads:
 | Name | Allowed | Meaning |
 |---|---|---|
 | `REBAL` | `"M"` / `"W"` / `"Q"` | Rebalance frequency |
-| `TOP_N` | int [5, 200] | Names held each rebal (equal-weight 1/TOP_N) |
-| `WEIGHT_SCHEME` | `"equal"` | Only equal-weight long-only is wired |
+| `TOP_N` | int [5, 200] | Names per leg each rebal |
+| `WEIGHT_SCHEME` | `"equal"` / `"long_short"` | `equal` = long-only top-N (1/TOP_N each). `long_short` = dollar-neutral: top-N long + bottom-N short, each ±1/(2·TOP_N) (gross 100%, net 0) |
 | `LOOKBACK_DAYS` | int ≥ 1 | Informational; signal uses its own windows |
+
+For `long_short`, `signal()` is unchanged — return the same score matrix (higher =
+more bullish). The pipeline longs the top-N scores and shorts the bottom-N; NaN
+names are excluded from both legs.
 
 `ctx` (from `alpha_lab.core.TrialContext`):
 

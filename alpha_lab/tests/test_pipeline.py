@@ -149,6 +149,11 @@ class TestValidateConstants:
         result = pipeline._validate_constants(_good_consts(), tmp_path / "x.py")
         assert result == {"REBAL": "M", "TOP_N": 30, "WEIGHT_SCHEME": "equal", "LOOKBACK_DAYS": 252}
 
+    def test_accepts_long_short_scheme(self, tmp_path: Path):
+        result = pipeline._validate_constants(
+            _good_consts(WEIGHT_SCHEME="long_short"), tmp_path / "x.py")
+        assert result["WEIGHT_SCHEME"] == "long_short"
+
     @pytest.mark.parametrize("bad", ["D", "Y", "monthly", ""])
     def test_rejects_bad_rebal(self, tmp_path: Path, bad: str):
         with pytest.raises(SystemExit, match="REBAL"):
@@ -334,6 +339,49 @@ class TestComputeMembership:
         # Quarterly should churn less — at least one mid-quarter date where M and Q differ
         # (fragile to seed; just assert shapes match)
         assert m_m.shape == m_q.shape
+
+    # --- long_short=True: signed membership (+1 long / -1 short / 0 out) ---
+
+    def test_long_short_signs_top_and_bottom(self):
+        # 4 tickers, constant ranks: A=4(top) B=3 C=2 D=1(bottom). top_n=1.
+        dates = pd.bdate_range("2020-01-01", "2020-03-31")
+        df = pd.DataFrame(0.0, index=dates, columns=["A", "B", "C", "D"])
+        df.loc[:, :] = [4, 3, 2, 1]
+        m = pipeline.compute_membership(df, top_n=1, rebal_freq="M", long_short=True)
+        row = m.loc["2020-03-02"]            # well past first anchor
+        assert row["A"] == 1                 # highest score → long
+        assert row["D"] == -1                # lowest score → short
+        assert row["B"] == 0 and row["C"] == 0
+
+    def test_long_short_is_dollar_neutral_and_full_gross(self):
+        dates = pd.bdate_range("2020-01-01", "2020-12-31")
+        rng = np.random.default_rng(0)
+        df = pd.DataFrame(rng.normal(0, 1, (len(dates), 10)), index=dates,
+                          columns=[f"T{i}" for i in range(10)])
+        row = pipeline.compute_membership(
+            df, top_n=3, rebal_freq="M", long_short=True).loc["2020-06-15"]
+        assert int(row.sum()) == 0           # 3 long + 3 short → net zero
+        assert int(row.abs().sum()) == 6     # gross = 2 * top_n
+
+    def test_long_short_excludes_nan_names_from_short_leg(self):
+        # A is NaN everywhere → must not be picked as a short despite "lowest".
+        dates = pd.bdate_range("2020-01-01", "2020-03-31")
+        df = pd.DataFrame(0.0, index=dates, columns=["A", "B", "C", "D"])
+        df.loc[:, :] = [1, 2, 3, 4]
+        df["A"] = np.nan
+        row = pipeline.compute_membership(
+            df, top_n=1, rebal_freq="M", long_short=True).loc["2020-03-02"]
+        assert row["A"] == 0                 # NaN excluded from both legs
+        assert row["B"] == -1                # lowest *valid* → short
+
+    def test_default_is_long_only_unsigned(self):
+        # Without long_short, values stay in {0, 1} (no -1 shorts).
+        dates = pd.bdate_range("2020-01-01", "2020-12-31")
+        rng = np.random.default_rng(1)
+        df = pd.DataFrame(rng.normal(0, 1, (len(dates), 8)), index=dates,
+                          columns=list("ABCDEFGH"))
+        m = pipeline.compute_membership(df, top_n=3, rebal_freq="M")
+        assert set(np.unique(m.values).tolist()) <= {0, 1}
 
 
 # ---------------------------------------------------------------------------

@@ -49,7 +49,10 @@ _FORBIDDEN_CALL_NAMES = {
 
 _REQUIRED_CONSTANTS = {"REBAL", "TOP_N", "WEIGHT_SCHEME", "LOOKBACK_DAYS"}
 _ALLOWED_REBAL = {"M", "W", "Q"}
-_ALLOWED_WEIGHT = {"equal"}   # signal-weighted allowed only when long-only is provable; keep equal for now
+# "equal"      → long-only, top-N equal-weight (1/TOP_N each)
+# "long_short" → dollar-neutral: top-N long + bottom-N short, each ±1/(2*TOP_N)
+#                (gross 100%, net 0). signal-weighted still not wired.
+_ALLOWED_WEIGHT = {"equal", "long_short"}
 
 
 def _call_target_name(call: ast.Call) -> str | None:
@@ -150,35 +153,54 @@ def _validate_constants(mod: ModuleType, path: Path) -> dict:
 _REBAL_RESAMPLE = {"M": "ME", "W": "W-FRI", "Q": "QE"}
 
 
-def compute_membership(signal_matrix: pd.DataFrame, top_n: int, rebal_freq: str) -> pd.DataFrame:
-    """Stair-step top-N membership matrix anchored at rebal period ends.
+def compute_membership(
+    signal_matrix: pd.DataFrame, top_n: int, rebal_freq: str, long_short: bool = False
+) -> pd.DataFrame:
+    """Stair-step signed membership matrix anchored at rebal period ends.
 
     Snap the daily score matrix to rebal-period anchors (M/W/Q), rank per anchor,
     then forward-fill so within-period queries return a stable membership (no
     daily churn). Returned DataFrame has the same index/columns as signal_matrix
-    and bool values: True iff that ticker was top-N at the most recent anchor.
+    and int8 values relative to the most recent anchor:
+
+      long_short=False : +1 iff top-N by score, else 0   (long-only)
+      long_short=True  : +1 top-N (long), -1 bottom-N (short), else 0
+
+    Ranks are descending (rank 1 = highest score); na_option="bottom" parks NaN
+    cells at the worst ranks, and the `& valid` mask drops them, so the bottom-N
+    are the lowest-scoring *valid* names. Longs win ties with shorts when the
+    valid pool is smaller than 2*top_n.
     """
     if rebal_freq not in _REBAL_RESAMPLE:
         raise ValueError(f"REBAL must be one of {set(_REBAL_RESAMPLE)}, got {rebal_freq!r}")
 
     anchored = signal_matrix.resample(_REBAL_RESAMPLE[rebal_freq]).last()
-    ranks_anchor = anchored.rank(axis=1, ascending=False, method="first", na_option="bottom")
-    membership_anchor = (ranks_anchor <= top_n) & anchored.notna()
-    # reindex+ffill on bool promotes to object-dtype where ffill can't reach
-    # (before the first anchor); going via int8 keeps the dtype numeric so
-    # fillna(0) doesn't trip pandas' future downcasting warning.
-    reindexed = membership_anchor.astype("int8").reindex(signal_matrix.index, method="ffill")
-    return reindexed.fillna(0).astype(bool)
+    valid = anchored.notna()
+    ranks = anchored.rank(axis=1, ascending=False, method="first", na_option="bottom")
+    longs = (ranks <= top_n) & valid
+    signed = longs.astype("int8")
+    if long_short:
+        n_valid = valid.sum(axis=1)                       # Series indexed by anchor
+        # bottom-N valid names, excluding anything already long (small pools)
+        shorts = ranks.gt(n_valid - top_n, axis=0) & (ranks > top_n) & valid
+        signed = signed - shorts.astype("int8")
+    # reindex+ffill keeps dtype numeric (int8) so fillna(0) doesn't trip pandas'
+    # future downcasting warning; values stay in {-1, 0, +1}.
+    reindexed = signed.reindex(signal_matrix.index, method="ffill")
+    return reindexed.fillna(0).astype("int8")
 
 
-def _build_alpha_model(signal_matrix: pd.DataFrame, top_n: int, data_provider, rebal_freq: str):
-    """Construct a qf-lib AlphaModel that returns LONG for the top-N tickers
-    by score at the most recent rebal-period anchor, OUT for everyone else.
+def _build_alpha_model(signal_matrix: pd.DataFrame, top_n: int, data_provider, rebal_freq: str,
+                       long_short: bool = False):
+    """Construct a qf-lib AlphaModel that, at the most recent rebal-period anchor,
+    returns LONG for the top-N tickers by score (and, when long_short, SHORT for
+    the bottom-N), OUT for everyone else.
     """
     from qf_lib.backtesting.alpha_model.alpha_model import AlphaModel
     from qf_lib.backtesting.alpha_model.exposure_enum import Exposure
 
-    membership = compute_membership(signal_matrix, top_n, rebal_freq)
+    membership = compute_membership(signal_matrix, top_n, rebal_freq, long_short=long_short)
+    _EXPOSURE = {1: Exposure.LONG, -1: Exposure.SHORT}
 
     class PrecomputedSignalAlphaModel(AlphaModel):
         def __init__(self, dp):
@@ -194,7 +216,7 @@ def _build_alpha_model(signal_matrix: pd.DataFrame, top_n: int, data_provider, r
             row = self._membership.loc[prior[-1]]
             ticker_str = ticker.ticker if hasattr(ticker, "ticker") else str(ticker)
             try:
-                return Exposure.LONG if bool(row.at[ticker_str]) else Exposure.OUT
+                return _EXPOSURE.get(int(row.at[ticker_str]), Exposure.OUT)
             except KeyError:
                 return Exposure.OUT
 
@@ -210,6 +232,7 @@ def _run_qf_backtest(
     top_n: int,
     rebal: str,
     backtest_name: str,
+    weight_scheme: str = "equal",
 ) -> pd.Series:
     """Run a qf-lib BacktestTradingSession and return the daily EOD equity series.
 
@@ -259,16 +282,21 @@ def _run_qf_backtest(
     pdf_exporter = PDFExporter(settings)
     excel_exporter = ExcelExporter(settings)
 
+    long_short = weight_scheme == "long_short"
+    # long_short fills 2*top_n slots (top-N long + bottom-N short); halving the
+    # per-name fraction keeps gross exposure at 100% (50% long / 50% short, net 0).
+    per_name = 1.0 / (2 * top_n) if long_short else 1.0 / top_n
+
     sb = BacktestTradingSessionBuilder(settings, pdf_exporter, excel_exporter)
     sb.set_data_provider(data_provider)
     sb.set_backtest_name(backtest_name)
-    sb.set_position_sizer(FixedPortfolioPercentagePositionSizer, fixed_percentage=1.0 / top_n)
+    sb.set_position_sizer(FixedPortfolioPercentagePositionSizer, fixed_percentage=per_name)
     sb.set_commission_model(IBCommissionModel)
     sb.set_frequency(Frequency.DAILY)
 
     ts = sb.build(IS_START, OS_END)
 
-    model = _build_alpha_model(signal_matrix, top_n, ts.data_provider, rebal)
+    model = _build_alpha_model(signal_matrix, top_n, ts.data_provider, rebal, long_short=long_short)
     model_tickers = [YFinanceTicker(t) for t in ctx.universe]
     ts.use_data_preloading(model_tickers)
 
@@ -417,6 +445,7 @@ def run(strategy_path: str | Path) -> int:
             top_n=consts["TOP_N"],
             rebal=consts["REBAL"],
             backtest_name=exp_id,
+            weight_scheme=consts["WEIGHT_SCHEME"],
         )
 
         gate = evaluate_gate(returns)
