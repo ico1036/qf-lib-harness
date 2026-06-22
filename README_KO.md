@@ -206,3 +206,14 @@ Claude Code 세션에서 각각 따로 invoke한다:
 `uv.lock`에 잠긴다. 엔진을 올리려면 rev를 bump하고 `uv lock`. 로컬에서 고치려면
 주석 처리된 `editable` 줄로 전환. 모든 결과는 *(qf-lib 커밋) × (데이터) ×
 (실험)* 으로 추적된다.
+
+### 백테스트: 기본값은 벡터화
+
+에이전트 루프의 백테스트(`alpha_lab/pipeline.py`)는 **벡터화**돼 있다 — 일별
+PnL이 행렬연산 한 방(전일 top-N membership × 수익률)이라, 실험 1개가 수 분이
+아니라 **약 2초** 만에 end-to-end로 돈다. look-ahead는 안전하지만 **거래비용·
+슬리피지는 무시**하므로 보고되는 Sharpe는 약간 낙관적이다 — 넓게 *탐색*하는
+용도. event-driven qf-lib 경로(`_run_qf_backtest`, IB 커미션 포함)는 후보로
+좁혀진 전략의 **거래비용 현실검증**용으로 남겨뒀고, `research/run_tsmom_backtest.py`
+가 대시보드 tearsheet 생성에 여전히 이 경로를 쓴다. 전략 계약은 그대로다:
+`signal(ctx)`는 `date × ticker` 점수 매트릭스를 반환한다.

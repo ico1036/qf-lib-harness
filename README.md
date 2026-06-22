@@ -206,3 +206,15 @@ strategy (you or agent) ─► alpha_lab (AST gate ─► backtest ─► IS/OS 
 `uv.lock`. To upgrade the engine, bump the rev and `uv lock`. To edit it
 locally, switch to the commented `editable` line. Every result is traceable to
 *(qf-lib commit) × (data) × (experiment)*.
+
+### Backtest: vectorized by default
+
+The agent loop's backtest (`alpha_lab/pipeline.py`) is **vectorized** — daily
+PnL is a single matrix op (prior-day top-N membership × returns), so one
+experiment runs end-to-end in **~2 s** instead of minutes. It is look-ahead
+safe but **ignores transaction costs / slippage**, so reported Sharpe is
+slightly optimistic — use it to *explore* widely. The event-driven qf-lib path
+(`_run_qf_backtest`, with IB commissions) is retained for **cost-realistic
+validation** of a shortlisted strategy, and `research/run_tsmom_backtest.py`
+still drives it for the dashboard tearsheets. The strategy contract is
+unchanged: `signal(ctx)` returns a `date × ticker` score matrix.

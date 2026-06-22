@@ -318,6 +318,33 @@ def _run_qf_backtest(
     return eod.to_simple_returns()
 
 
+def _run_vectorized_backtest(
+    ctx: TrialContext,
+    signal_matrix: pd.DataFrame,
+    top_n: int,
+    rebal: str,
+    backtest_name: str,
+) -> pd.Series:
+    """Fast vectorized backtest — same membership/timing contract as
+    _run_qf_backtest, but PnL is pure matrix math (no broker / order / commission
+    event loop). Returns the daily simple-returns series over [IS_START, OS_END).
+
+    ~1000x faster than the event-driven path. Tradeoff: ignores transaction
+    costs, slippage and discrete share sizing — use _run_qf_backtest for the
+    final realistic validation of a shortlisted strategy.
+
+    Look-ahead safe: position on day t uses membership as of the prior day
+    (weight.shift(1)), exactly like PrecomputedSignalAlphaModel's `idx < ts`.
+    """
+    membership = compute_membership(signal_matrix, top_n, rebal)  # date×ticker bool
+    close = ctx.adj_close.reindex(index=membership.index, columns=membership.columns)
+    asset_ret = close.pct_change()
+    weight = membership.astype("float64") / float(top_n)   # equal weight, 1/top_n per held name
+    port_ret = (weight.shift(1) * asset_ret).sum(axis=1)   # prior-day weights earn today's return
+    mask = (port_ret.index >= pd.Timestamp(IS_START)) & (port_ret.index < pd.Timestamp(OS_END))
+    return port_ret[mask].astype("float64")
+
+
 # ---------------------------------------------------------------------------
 # IS/OS gate
 # ---------------------------------------------------------------------------
@@ -438,8 +465,8 @@ def run(strategy_path: str | Path) -> int:
         print(f"[alpha_lab] signal matrix {signal_matrix.shape}, "
               f"non-NaN cells: {signal_matrix.notna().sum().sum():,}")
 
-        print(f"[alpha_lab] running qf-lib backtest …")
-        returns = _run_qf_backtest(
+        print(f"[alpha_lab] running vectorized backtest …")
+        returns = _run_vectorized_backtest(
             ctx,
             signal_matrix,
             top_n=consts["TOP_N"],
