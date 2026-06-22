@@ -195,3 +195,13 @@ issue——包括你手写的。
 （`[tool.uv.sources]`，fork master `9ba5a0f`）中作为外部依赖被锁定，并在
 `uv.lock` 中固定。升级引擎：bump rev 后 `uv lock`。本地修改：切到被注释的
 `editable` 行。每个结果都可追溯到 *(qf-lib 提交) × (数据) × (实验)*。
+
+### 回测：默认向量化
+
+智能体循环的回测（`alpha_lab/pipeline.py`）已**向量化**——每日 PnL 是一次矩阵
+运算（前一日 top-N 成分 × 收益率），因此单个实验端到端只需 **约 2 秒**，而非数
+分钟。它对 look-ahead 安全，但**忽略交易成本／滑点**，所以报告的 Sharpe 略偏乐
+观——用于大范围*探索*。事件驱动的 qf-lib 路径（`_run_qf_backtest`，含 IB 佣金）
+保留用于入围策略的**含成本的真实验证**，且 `research/run_tsmom_backtest.py` 仍用
+它生成仪表盘 tearsheet。策略契约不变：`signal(ctx)` 返回 `date × ticker` 评分
+矩阵。

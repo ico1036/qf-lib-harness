@@ -32,7 +32,7 @@ from qf_lib.common.tickers.tickers import YFinanceTicker
 
 from config import PRICES_PATH
 from alpha_lab.parquet_data_provider import build_data_provider
-from tsmom_alpha_model import TSMomentumAlphaModel
+from tsmom_alpha_model_cached import TSMomentumAlphaModelCached as TSMomentumAlphaModel
 
 # Required for PresetDataProvider look-ahead bias check
 MarketOpenEvent.set_trigger_time({"hour": 9, "minute": 30, "second": 0, "microsecond": 0})
@@ -43,7 +43,7 @@ UNIVERSE_SIZE = 100
 IS_START = datetime(2018, 1, 1)
 IS_END = datetime(2021, 12, 31)
 OS_START = datetime(2022, 1, 1)
-OS_END = datetime(2024, 12, 31)
+OS_END = datetime(2026, 4, 30)
 DATA_PAD_YEARS = 2
 N_JOBS = 1
 

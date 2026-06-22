@@ -70,8 +70,18 @@ FROZEN (human-controlled, do not edit):
 
 ## IS/OS gate (lock — do not tune)
 
-The pipeline runs ONE qf-lib backtest from `IS_START` to `OS_END`, then
-slices the daily simple returns:
+The pipeline runs ONE **vectorized** backtest from `IS_START` to `OS_END`
+(`_run_vectorized_backtest`: prior-day top-N membership × daily returns, pure
+matrix PnL — no broker/order/commission loop), then slices the daily simple
+returns:
+
+> **Backtest engine.** The loop uses the vectorized path by default (~1000×
+> faster than the old event-driven `BacktestTradingSession`). It is look-ahead
+> safe (positions use the prior day's membership) but **ignores transaction
+> costs / slippage**, so reported Sharpe is slightly optimistic. The
+> event-driven path is kept as `_run_qf_backtest` for cost-realistic
+> validation of a shortlisted strategy. The strategy contract is unchanged —
+> `signal(ctx)` still returns a `date × ticker` score matrix.
 
 ```
 IS = [2016-01-04, 2023-01-03)
