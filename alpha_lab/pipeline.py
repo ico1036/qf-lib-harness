@@ -324,8 +324,9 @@ def _run_vectorized_backtest(
     top_n: int,
     rebal: str,
     backtest_name: str,
+    weight_scheme: str = "equal",
 ) -> pd.Series:
-    """Fast vectorized backtest — same membership/timing contract as
+    """Fast vectorized backtest — same membership/timing/weighting contract as
     _run_qf_backtest, but PnL is pure matrix math (no broker / order / commission
     event loop). Returns the daily simple-returns series over [IS_START, OS_END).
 
@@ -333,13 +334,20 @@ def _run_vectorized_backtest(
     costs, slippage and discrete share sizing — use _run_qf_backtest for the
     final realistic validation of a shortlisted strategy.
 
+    Weighting matches the event-driven path:
+      - equal      : signed membership +1/0, 1/top_n per long name.
+      - long_short : signed membership +1/-1/0, ±1/(2·top_n) per name
+                     (gross 100%, dollar-neutral).
+
     Look-ahead safe: position on day t uses membership as of the prior day
     (weight.shift(1)), exactly like PrecomputedSignalAlphaModel's `idx < ts`.
     """
-    membership = compute_membership(signal_matrix, top_n, rebal)  # date×ticker bool
+    long_short = weight_scheme == "long_short"
+    membership = compute_membership(signal_matrix, top_n, rebal, long_short=long_short)  # date×ticker signed int8
     close = ctx.adj_close.reindex(index=membership.index, columns=membership.columns)
     asset_ret = close.pct_change()
-    weight = membership.astype("float64") / float(top_n)   # equal weight, 1/top_n per held name
+    per_name = 1.0 / (2 * top_n) if long_short else 1.0 / top_n
+    weight = membership.astype("float64") * per_name       # +long / -short, sized per name
     port_ret = (weight.shift(1) * asset_ret).sum(axis=1)   # prior-day weights earn today's return
     mask = (port_ret.index >= pd.Timestamp(IS_START)) & (port_ret.index < pd.Timestamp(OS_END))
     return port_ret[mask].astype("float64")
